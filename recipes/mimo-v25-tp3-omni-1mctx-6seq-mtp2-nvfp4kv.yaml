@@ -1,0 +1,97 @@
+recipe_version: "1"
+name: MiMo-V2.5-NVFP4-TP3-OMNI-1MCTX-6SEQ-MTP2-MULTIRAIL-CG-NVFP4KV-WMMA-NCCL64
+description: >
+  Experimental TP=3 Omni (text/image/video/audio) + MTP2 + 1M-context path for
+  lukealonso/MiMo-V2.5-NVFP4 on a 3x DGX Spark cluster (node-a + node-b + node-c).
+  Starts from the four-HCA multirail golden recipe and adds the HeNryous-inspired
+  nvfp4 DiffKV KV cache plus the gated WMMA full-attention decode path. The NCCL64
+  variant fixes the rejected NCCL_NTHREADS=32 setting seen on first boot.
+  Key high-context unlock: --kv-cache-dtype nvfp4 (vs the frozen fp8_e4m3 path).
+
+model: lukealonso/MiMo-V2.5-NVFP4
+container: <your-mimo-omni-vllm-image>:<tag>   # built from the upstream mod stack (see README credits)
+cluster_only: true
+solo_only: false
+
+# Pull these from upstream (eugr/spark-vllm-docker PR#251, HeNryous/mimo-spark-optimized);
+# they carry their own licenses and are NOT vendored in this repo.
+mods:
+  - mods/drop-caches
+  - mods/ray-keep-node-nccl-hca
+  - mods/fix-prometheus-instrumentator-router
+  - mods/fix-mimo-v2-vllm
+  - mods/fix-modelopt-mixed-mxfp8
+  - mods/nvfp4-kv-diffkv          # <-- the NVFP4 KV cache enablement
+  - mods/mimo-v2-tp3-virtual-heads
+
+defaults:
+  port: 8000
+  host: 0.0.0.0
+  served_model_name: MiMo-V2.5-NVFP4
+  model_path: /root/.cache/huggingface/hub/models--lukealonso--MiMo-V2.5-NVFP4/snapshots/<SNAPSHOT_HASH>
+  tensor_parallel: 3
+  pipeline_parallel: 1
+  gpu_memory_utilization: 0.89
+  max_model_len: 1000000
+  max_num_batched_tokens: 8192
+  max_num_seqs: 6
+
+env:
+  TORCH_CUDA_ARCH_LIST: "12.1a"
+  PYTORCH_CUDA_ALLOC_CONF: expandable_segments:True
+  VLLM_MIMO_V2_TP3_VIRTUAL_HEADS: "1"
+  VLLM_NVFP4_GEMM_BACKEND: flashinfer-cutlass
+  VLLM_USE_FLASHINFER_MOE_FP4: "1"
+  VLLM_FLASHINFER_MOE_BACKEND: throughput
+  VLLM_USE_RAY_V2_EXECUTOR_BACKEND: "0"
+  VLLM_USE_RAY_COMPILED_DAG_OVERLAP_COMM: "0"
+  VLLM_ALLOW_LONG_MAX_MODEL_LEN: "1"
+  VLLM_NVFP4_INLINE: "1"
+  VLLM_WMMA_DECODE: "1"
+  VLLM_WMMA_INSPECT: "0"
+  VLLM_WMMA_COMPARE: "0"
+  VLLM_WMMA_AUTHCOMPARE: "0"
+  NCCL_CUMEM_ENABLE: "0"
+  NCCL_NVLS_ENABLE: "0"
+  NCCL_NTHREADS: "64"
+  NCCL_NSOCKS_PERTHREAD: "2"
+  NCCL_BUFFSIZE: "8388608"
+  NCCL_CROSS_NIC: "1"
+  NCCL_IB_GID_INDEX: "3"
+  # Example internal RoCE ranges — replace with your own multirail HCA subnets.
+  NCCL_IB_ADDR_RANGE: 192.168.100.0/24,192.168.101.0/24,192.168.102.0/24,192.168.110.0/24,192.168.111.0/24,192.168.112.0/24
+
+command: |
+  vllm serve {model_path} \
+      --served-model-name {served_model_name} \
+      --trust-remote-code \
+      --tensor-parallel-size {tensor_parallel} \
+      --pipeline-parallel-size {pipeline_parallel} \
+      --distributed-executor-backend ray \
+      --load-format instanttensor \
+      --hf-overrides '{{"architectures":["MiMoV2OmniForCausalLM"]}}' \
+      --limit-mm-per-prompt '{{"image":4,"video":1,"audio":1}}' \
+      --mm-encoder-tp-mode data \
+      --attention-backend triton_attn_diffkv \
+      --kv-cache-dtype nvfp4 \
+      --gpu-memory-utilization {gpu_memory_utilization} \
+      --max-model-len {max_model_len} \
+      --max-num-batched-tokens {max_num_batched_tokens} \
+      --max-num-seqs {max_num_seqs} \
+      --block-size 32 \
+      --cudagraph-capture-sizes 1 2 4 8 \
+      --enable-prefix-caching \
+      --enable-chunked-prefill \
+      --speculative-config '{{"method":"mtp","num_speculative_tokens":2}}' \
+      --no-async-scheduling \
+      --enable-auto-tool-choice \
+      --tool-call-parser mimo \
+      --reasoning-parser mimo \
+      --host {host} \
+      --port {port}
+
+# Keep fixed for the known-good NVFP4-KV path:
+#   gpu_memory_utilization: 0.89 | max_model_len: 1000000 | max_num_batched_tokens: 8192
+#   max_num_seqs: 6 | NCCL_NTHREADS: 64 | NCCL_BUFFSIZE: 8388608
+# The frozen public path differs only by: --kv-cache-dtype fp8_e4m3 (no nvfp4-kv-diffkv mod,
+#   no VLLM_NVFP4_INLINE / VLLM_WMMA_DECODE). That path is faster but ~3.06M KV pool vs ~10.59M here.
