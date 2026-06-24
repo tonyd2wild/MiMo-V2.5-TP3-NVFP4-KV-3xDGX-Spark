@@ -1,5 +1,7 @@
 # MiMo-V2.5 Omni · TP=3 · **NVFP4 KV cache** on 3× DGX Spark
 
+> 🔀 This is the **3-Spark (TP=3)** build. Running **2 Sparks**? → [MiMo-V2.5-TP2-1M-NVFP4-KV-2xDGX-Spark](https://github.com/tonyd2wild/MiMo-V2.5-TP2-1M-NVFP4-KV-2xDGX-Spark)
+
 Running [`lukealonso/MiMo-V2.5-NVFP4`](https://huggingface.co/lukealonso/MiMo-V2.5-NVFP4) (Omni: text + image + video + audio) tensor-parallel across **three NVIDIA DGX Spark (GB10)** boxes — with the KV cache stored in **4-bit `nvfp4`** instead of 8-bit `fp8`.
 
 The single-request context stays at **1,000,000 tokens**. What changes is the **total KV pool**: 4-bit NVFP4 KV roughly **3.5× the concurrent 1M-context headroom** of the fp8 path, on the *same* hardware.
