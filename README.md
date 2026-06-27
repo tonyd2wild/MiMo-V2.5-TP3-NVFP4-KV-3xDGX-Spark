@@ -98,3 +98,7 @@ This is a composition of community work plus our TP=3 / NVFP4-KV integration and
 - Check the license/redistribution terms of every upstream mod before redistributing its code.
 
 *Validated on 3× DGX Spark, 2026-06. "10.59×" = full-1M-request KV capacity, not a single 10M-token request.*
+
+### NVFP4-KV patch (included)
+
+The `recipe/mods/nvfp4-kv-diffkv/` mod (`triton_attn_diffkv.py`, `triton_unified_attention_diffkv.py`, `wmma_decode.py`, `run.sh`) is the exact cache patch that yields the ~10.59M-token KV pool; same code as the TP2 repo. It is applied by `recipe/apply-mods.sh`.
