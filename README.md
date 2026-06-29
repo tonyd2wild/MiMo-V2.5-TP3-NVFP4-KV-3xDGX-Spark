@@ -83,6 +83,8 @@ If the `GPU KV cache size` line is low or asymmetric by rank, stop and debug bef
 
 ## Credits
 
+- **drowzeys ("Keys")** — origin of the NVFP4 KV-cache wiring this build’s nvfp4 KV path descends from ([Keys---Full-GLM-5.2-Quantrio…](https://github.com/drowzeys/Keys---Full-GLM-5.2-Quantrio-INT4-INT8-mixed-8bit-Attention-on-4-x-DGX-Spark-GB10-Cluster)).
+
 This is a composition of community work plus our TP=3 / NVFP4-KV integration and validation. Please keep these credits with any copy.
 
 - [`lukealonso`](https://huggingface.co/lukealonso) — the `MiMo-V2.5-NVFP4` checkpoint, the chthonic vLLM work this builds around, and the MiniMax-M3 TP=3 virtual-head sharding idea we adapted for MiMo TP=3.
